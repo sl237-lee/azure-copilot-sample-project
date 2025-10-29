@@ -1,0 +1,54 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/microsoft/promptflow/main/schemas/flow.schema.json
+version: 1.1
+kind: promptflow
+name: financial_insights_flow
+inputs:
+  user_query:
+    type: string
+    default: "Summarize portfolio risk and 3 insights for 2024."
+outputs:
+  answer:
+    type: string
+    reference: ${postprocess.output}
+nodes:
+- name: system_prompt
+  type: prompt
+  source:
+    type: file
+    path: nodes/system_prompt.jinja2
+  inputs:
+    persona: "You are a financial insights assistant. Be concise, factual, and add bullet points for insights."
+- name: data_query
+  type: python
+  source:
+    type: file
+    path: nodes/data_query.py
+  inputs:
+    query: ${inputs.user_query}
+    data_path: "../data/portfolio_summary.csv"
+- name: llm
+  type: llm
+  source:
+    type: code
+  inputs:
+    temperature: 0.2
+    max_tokens: 800
+    deployment_name: "gpt-4o-mini"  # Replace in Foundry with your Azure OpenAI deployment
+    prompt: |
+      {{system_prompt.output}}
+
+      Context (CSV-derived):
+      {{data_query.context}}
+
+      User question:
+      {{inputs.user_query}}
+
+      Provide a helpful, well-structured answer grounded in the context. If unknown, say so.
+  connection: azure_open_ai_connection
+- name: postprocess
+  type: python
+  source:
+    type: file
+    path: nodes/postprocess.py
+  inputs:
+    raw_text: ${llm.output}
